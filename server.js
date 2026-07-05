@@ -224,13 +224,21 @@ app.get('/api/dashboard', async (req, res) => {
         const totalProducts = await Product.countDocuments(queryFilter);
         const lowStockProducts = await Product.countDocuments({ ...queryFilter, quantity: { $lte: 5 } });
 
+        // Expired/Near Expiry Stats (within 30 days)
+        const dateIn30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const expiredProducts = await Product.countDocuments({
+            ...queryFilter,
+            expiry_date: { $ne: "", $lte: dateIn30Days }
+        });
+
         res.json({
             totalBillsToday,
             dailyIncome,
             totalBillsMonth,
             monthlyIncome,
             totalProducts,
-            lowStockProducts
+            lowStockProducts,
+            expiredProducts
         });
     } catch (err) {
         return res.status(500).json({ error: err.message });
@@ -411,8 +419,13 @@ app.get('/api/invoices/:id', async (req, res) => {
             date: invoice.date,
             time: invoice.time,
             total_amount: invoice.total_amount,
+            payment_method: invoice.payment_method || 'Cash',
+            discount_total: invoice.discount_total || 0,
+            tax_vat: invoice.tax_vat || 0,
+            tax_nbt: invoice.tax_nbt || 0,
             items: invoice.items.map(item => ({
                 id: item._id ? item._id.toString() : null,
+                product_id: item.product_id ? item.product_id.toString() : null,
                 product_name: item.product_name,
                 quantity: item.quantity,
                 price: item.price,
@@ -437,6 +450,7 @@ app.post('/api/invoices', async (req, res) => {
     const invoice_number = 'INV-' + today.getTime().toString().slice(-6);
 
     const formattedItems = items.map(item => ({
+        product_id: item.id || null,
         product_name: item.name,
         quantity: item.quantity,
         price: item.price,
@@ -462,7 +476,7 @@ app.post('/api/invoices', async (req, res) => {
         // Update product stock and log outgoing stock
         for (const item of items) {
             const product = await Product.findOneAndUpdate(
-                { name: item.name, user_id: req.user._id },
+                { _id: item.id, user_id: req.user._id },
                 { $inc: { quantity: -item.quantity } },
                 { new: true }
             );
@@ -507,10 +521,18 @@ app.delete('/api/invoices/:id', async (req, res) => {
         // Need to add back the stock quantities
         if (invoice.user_id) {
             for (const item of invoice.items) {
-                await Product.findOneAndUpdate(
-                    { name: item.product_name, user_id: invoice.user_id },
-                    { $inc: { quantity: item.quantity } }
-                );
+                if (item.product_id) {
+                    await Product.findOneAndUpdate(
+                        { _id: item.product_id, user_id: invoice.user_id },
+                        { $inc: { quantity: item.quantity } }
+                    );
+                } else {
+                    // Fallback to name for legacy invoices
+                    await Product.findOneAndUpdate(
+                        { name: item.product_name, user_id: invoice.user_id },
+                        { $inc: { quantity: item.quantity } }
+                    );
+                }
             }
         }
         res.json({ message: 'Invoice deleted successfully. Inventory restocked.' });

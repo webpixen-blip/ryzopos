@@ -12,7 +12,7 @@ const connectDB = async () => {
     }
 
     try {
-        const uri = process.env.MONGO_URI || 'mongodb+srv://slryzo:Poorna222%40%23%24@cluster0.9pwoufs.mongodb.net/pos_system?retryWrites=true&w=majority&appName=Cluster0';
+        const uri = process.env.MONGO_URI || 'mongodb+srv://slryzo:Poorna222%40%23%24@cluster0.9pwoufs.mongodb.net/?appName=Cluster0';
         const db = await mongoose.connect(uri, {
             serverSelectionTimeoutMS: 5000 // Tweak timeout down so Serverless fails faster instead of hanging
         });
@@ -61,6 +61,7 @@ const ProductSchema = new mongoose.Schema({
 });
 
 const InvoiceItemSchema = new mongoose.Schema({
+    product_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
     product_name: { type: String, required: true },
     quantity: { type: Number, required: true },
     price: { type: Number, required: true },
@@ -91,7 +92,7 @@ const CustomerSchema = new mongoose.Schema({
 
 const StockLogSchema = new mongoose.Schema({
     user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    product_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    product_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
     product_name: { type: String },
     action: { type: String, required: true }, // 'IN' or 'OUT'
     quantity: { type: Number, required: true },

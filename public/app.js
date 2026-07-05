@@ -145,6 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateClock();
     setInterval(updateClock, 1000);
     
+    setupTheme();
     setupNavigation();
     setupModals();
     setupBarcodeScanner(); // Initialize scanner listener
@@ -170,6 +171,45 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+function setupTheme() {
+    const toggleBtn = document.getElementById('theme-toggle');
+    if (!toggleBtn) return;
+    
+    const applyChartDefaults = () => {
+        if (typeof Chart !== 'undefined') {
+            const isDark = document.body.classList.contains('dark-theme');
+            Chart.defaults.color = isDark ? '#94a3b8' : '#64748b';
+            Chart.defaults.borderColor = isDark ? '#1e293b' : '#e2e8f0';
+        }
+    };
+
+    const savedTheme = localStorage.getItem('pos_theme') || 'light';
+    if (savedTheme === 'dark') {
+        document.body.classList.add('dark-theme');
+        toggleBtn.innerHTML = "<i class='bx bx-sun'></i>";
+    } else {
+        document.body.classList.remove('dark-theme');
+        toggleBtn.innerHTML = "<i class='bx bx-moon'></i>";
+    }
+    applyChartDefaults();
+
+    toggleBtn.addEventListener('click', () => {
+        if (document.body.classList.contains('dark-theme')) {
+            document.body.classList.remove('dark-theme');
+            localStorage.setItem('pos_theme', 'light');
+            toggleBtn.innerHTML = "<i class='bx bx-moon'></i>";
+        } else {
+            document.body.classList.add('dark-theme');
+            localStorage.setItem('pos_theme', 'dark');
+            toggleBtn.innerHTML = "<i class='bx bx-sun'></i>";
+        }
+        applyChartDefaults();
+        if (currentTab === 'dashboard-view') {
+            loadDashboard();
+        }
+    });
+}
 
 function updateClock() {
     const now = new Date();
@@ -459,6 +499,7 @@ async function loadDashboard() {
         document.getElementById('dash-income-today').textContent = formatCurrency(stats.dailyIncome);
         document.getElementById('dash-income-month').textContent = formatCurrency(stats.monthlyIncome);
         document.getElementById('dash-low-stock').textContent = stats.lowStockProducts;
+        document.getElementById('dash-expired-stock').textContent = stats.expiredProducts || 0;
 
         // Fetch Profits
         const resProfit = await fetchAuth(`${API_BASE}/reports/profit`);
@@ -1022,9 +1063,9 @@ function showInvoicePrintout(invoice) {
     const receiptExtra = document.createElement('div');
     receiptExtra.innerHTML = `
         <p>----------------------------</p>
-        <div style="display:flex; justify-content:space-between;"><span>Subtotal:</span><span>${subtotal.toFixed(2)}</span></div>
-        <div style="display:flex; justify-content:space-between;"><span>Discount:</span><span>-${(invoice.discount_total || 0).toFixed(2)}</span></div>
-        <div style="display:flex; justify-content:space-between;"><span>VAT:</span><span>+${(invoice.tax_vat || 0).toFixed(2)}</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>Subtotal:</span><span>${Number(subtotal || 0).toFixed(2)}</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>Discount:</span><span>-${Number(invoice.discount_total || 0).toFixed(2)}</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>VAT:</span><span>+${Number(invoice.tax_vat || 0).toFixed(2)}</span></div>
         <div style="display:flex; justify-content:space-between;"><span>Pay Method:</span><span>${invoice.payment_method || 'Cash'}</span></div>
     `;
     
@@ -1033,7 +1074,7 @@ function showInvoicePrintout(invoice) {
     receiptExtra.id = 'receipt-extra-info';
     document.querySelector('.receipt-total').before(receiptExtra);
 
-    document.getElementById('receipt-total-amount').textContent = invoice.total_amount.toFixed(2);
+    document.getElementById('receipt-total-amount').textContent = Number(invoice.total_amount || 0).toFixed(2);
     
     // Add Share buttons to modal footer
     const footer = document.querySelector('#invoice-modal .modal-footer');
@@ -1165,7 +1206,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 async function loadReports() {
-    const thead = document.querySelector('#reports-table document, #reports-table thead');
+    const thead = document.querySelector('#reports-table thead');
     const tbody = document.querySelector('#reports-table tbody');
     tbody.innerHTML = '';
     
