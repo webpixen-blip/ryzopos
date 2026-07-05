@@ -32,9 +32,23 @@
                     <label>Password</label>
                     <input type="password" id="login-password" class="form-control" required placeholder="Password">
                 </div>
+                <div style="text-align: right; margin-bottom: 15px;">
+                    <span id="switch-to-forgot" style="color: var(--primary); cursor: pointer; font-size: 13px; font-weight: 500;">Forgot Password?</span>
+                </div>
                 <button type="submit" class="btn btn-primary btn-block btn-lg">Login</button>
                 <div class="auth-switch">
                     Don't have an account? <span id="switch-to-register">Register Business</span>
+                </div>
+            </form>
+
+            <form id="forgot-form" class="auth-form">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="forgot-email" class="form-control" required placeholder="you@domain.com">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block btn-lg">Reset Password</button>
+                <div class="auth-switch">
+                    Back to <span id="switch-to-login-from-forgot">Login</span>
                 </div>
             </form>
             
@@ -102,6 +116,18 @@
                 <a href="#" class="nav-link" data-target="reports-view">
                     <i class='bx bx-bar-chart-alt-2 icon'></i>
                     <span class="link-name">Reports</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-link" data-target="expenses-view">
+                    <i class='bx bx-credit-card icon'></i>
+                    <span class="link-name">Expenses</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-link" data-target="suppliers-view">
+                    <i class='bx bx-user-voice icon'></i>
+                    <span class="link-name">Suppliers</span>
                 </a>
             </li>
             <li id="nav-item-admin" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid var(--border);">
@@ -176,6 +202,20 @@
                         <div class="stat-details">
                             <h3>Monthly Profit</h3>
                             <p class="stat-value" id="dash-profit-month">0.00</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon danger"><i class='bx bx-trending-down'></i></div>
+                        <div class="stat-details">
+                            <h3>Monthly Expenses</h3>
+                            <p class="stat-value" id="dash-expenses-month">0.00</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon income"><i class='bx bx-badge-check'></i></div>
+                        <div class="stat-details">
+                            <h3>Net Profit</h3>
+                            <p class="stat-value" id="dash-net-profit">0.00</p>
                         </div>
                     </div>
                     <div class="stat-card">
@@ -402,6 +442,58 @@
                 </div>
             </section>
 
+            <!-- Expenses View -->
+            <section id="expenses-view" class="view">
+                <div class="view-header">
+                    <h2>Expense Management</h2>
+                    <button class="btn btn-primary" id="btn-add-expense"><i class='bx bx-plus'></i> Add Expense</button>
+                </div>
+                <div class="table-card">
+                    <div class="table-responsive">
+                        <table class="data-table" id="expenses-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Category</th>
+                                    <th>Description</th>
+                                    <th>Amount</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Suppliers View -->
+            <section id="suppliers-view" class="view">
+                <div class="view-header">
+                    <h2>Supplier Management</h2>
+                    <button class="btn btn-primary" id="btn-add-supplier"><i class='bx bx-plus'></i> Add Supplier</button>
+                </div>
+                <div class="table-card">
+                    <div class="table-responsive">
+                        <table class="data-table" id="suppliers-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>Address</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <!-- Admin Accounts View -->
             <section id="admin-view" class="view">
                 <div class="view-header">
@@ -583,7 +675,102 @@
                 </form>
             </div>
         </div>
+
+        <!-- Expense Modal -->
+        <div class="modal" id="expense-modal">
+            <div class="modal-header">
+                <h3>Add Expense</h3>
+                <button class="close-btn" id="btn-close-expense-modal"><i class='bx bx-x'></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="expense-form">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="expense-date" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="expense-category" class="form-control" required>
+                            <option value="">Select Category</option>
+                            <option value="Rent">Rent</option>
+                            <option value="Salaries">Salaries</option>
+                            <option value="Utilities">Utilities (Electricity, Water, Internet)</option>
+                            <option value="Inventory Purchase">Inventory Purchase</option>
+                            <option value="Marketing">Marketing / Advertising</option>
+                            <option value="Transport / Fuel">Transport / Fuel</option>
+                            <option value="Repair / Maintenance">Repair / Maintenance</option>
+                            <option value="Other">Other Miscellaneous</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount</label>
+                        <input type="number" step="0.01" id="expense-amount" class="form-control" placeholder="Enter amount" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="expense-description" class="form-control" placeholder="Optional notes..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Save Expense</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Supplier Modal -->
+        <div class="modal" id="supplier-modal">
+            <div class="modal-header">
+                <h3 id="supplier-modal-title">Add Supplier</h3>
+                <button class="close-btn" id="btn-close-supplier-modal"><i class='bx bx-x'></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="supplier-form">
+                    <input type="hidden" id="supplier-id">
+                    <div class="form-group">
+                        <label>Supplier Name *</label>
+                        <input type="text" id="supplier-name" class="form-control" required placeholder="e.g. ABC Distributors">
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                        <div class="form-group">
+                            <label>Phone Number</label>
+                            <input type="tel" id="supplier-phone" class="form-control" placeholder="+94711234567">
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="supplier-email" class="form-control" placeholder="supplier@email.com">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Address</label>
+                        <textarea id="supplier-address" class="form-control" placeholder="Supplier address..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Save Supplier</button>
+                </form>
+            </div>
+        </div>
     </div>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-nav">
+        <a href="#" class="mobile-nav-link active" data-target="dashboard-view">
+            <i class='bx bx-grid-alt'></i>
+            <span>Dashboard</span>
+        </a>
+        <a href="#" class="mobile-nav-link" data-target="pos-view">
+            <i class='bx bx-cart'></i>
+            <span>POS</span>
+        </a>
+        <a href="#" class="mobile-nav-link" data-target="inventory-view">
+            <i class='bx bx-box'></i>
+            <span>Inventory</span>
+        </a>
+        <a href="#" class="mobile-nav-link" data-target="reports-view">
+            <i class='bx bx-bar-chart-alt-2'></i>
+            <span>Reports</span>
+        </a>
+        <a href="#" class="mobile-nav-link" data-target="expenses-view">
+            <i class='bx bx-credit-card'></i>
+            <span>Expenses</span>
+        </a>
+    </nav>
 
     <script src="/app.js"></script>
 

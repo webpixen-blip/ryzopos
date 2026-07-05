@@ -210,15 +210,22 @@ const User = {
         );
     },
     create: async (data) => {
-        const res = await firebaseRequest('users', 'POST', {
+        const id = data._id || data.id || null;
+        const payload = {
             email: data.email,
-            password: data.password,
+            password: data.password || '',
             business_name: data.business_name,
             whatsapp_number: data.whatsapp_number || '',
             marketplace_enabled: data.marketplace_enabled || false,
             role: data.role || 'user'
-        });
-        return { id: res.name, _id: res.name, ...data };
+        };
+        if (id) {
+            await firebaseRequest(`users/${id}`, 'PUT', payload);
+            return { id, _id: id, ...data };
+        } else {
+            const res = await firebaseRequest('users', 'POST', payload);
+            return { id: res.name, _id: res.name, ...data };
+        }
     },
     updateOne: async (filter, updates) => {
         const item = await findOne('users', filter);
@@ -380,30 +387,130 @@ const StockLog = {
 const initializeDatabase = async () => {
     try {
         const { encrypt } = require('./utils/encryption');
-        const bcrypt = require('bcryptjs');
-
-        const adminEmailObj = encrypt('admin');
-        const users = await find('users');
+        const adminEmail = 'admin@eleveta-pos.com';
+        const adminEmailObj = encrypt(adminEmail);
         
+        const users = await find('users');
         const adminExists = users.find(u => u.email === adminEmailObj);
-        const legacyAdmin = users.find(u => u.email === 'Admin');
 
-        if (!adminExists && !legacyAdmin) {
-            const hashedPassword = await bcrypt.hash('Mynameis1234', 10);
-            await User.create({
-                email: 'admin', // The setter in model didn't apply here since we emulate it. Let's encrypt it directly:
-                email: encrypt('admin'),
-                password: hashedPassword,
-                business_name: 'Admin Portal',
-                role: 'admin'
-            });
-            console.log('Admin user created securely in Firebase.');
-        } else if (legacyAdmin && legacyAdmin.role !== 'admin') {
-            await User.updateOne({ email: 'Admin' }, { role: 'admin' });
-            console.log('Admin role updated for existing admin user in Firebase.');
+        if (!adminExists) {
+            let uid;
+            try {
+                // Try signing up default admin in Firebase Auth
+                const authRes = await firebaseAuthSignUp(adminEmail, 'Mynameis1234');
+                uid = authRes.localId;
+            } catch (err) {
+                if (err.message.includes('EMAIL_EXISTS')) {
+                    // Email exists, try signing in to get localId
+                    const loginRes = await firebaseAuthSignIn(adminEmail, 'Mynameis1234');
+                    uid = loginRes.localId;
+                } else {
+                    throw err;
+                }
+            }
+
+            if (uid) {
+                await User.create({
+                    _id: uid,
+                    email: adminEmailObj,
+                    business_name: 'Admin Portal',
+                    role: 'admin'
+                });
+                console.log('Admin user profile created in Firebase.');
+            }
         }
     } catch (err) {
         console.error('Error initializing default user in Firebase:', err.message);
+    }
+};
+
+const API_KEY = process.env.FIREBASE_API_KEY;
+
+async function firebaseAuthSignUp(email, password) {
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, returnSecureToken: true })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.error?.message || 'Sign up failed');
+    }
+    return data;
+}
+
+async function firebaseAuthSignIn(email, password) {
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, returnSecureToken: true })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.error?.message || 'Sign in failed');
+    }
+    return data;
+}
+
+async function firebaseAuthPasswordReset(email) {
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${API_KEY}`;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestType: "PASSWORD_RESET", email })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.error?.message || 'Password reset failed');
+    }
+    return data;
+}
+
+// Expense Model Emulation
+const Expense = {
+    find: (filter = {}) => {
+        return new QueryChain(find('expenses', filter));
+    },
+    create: async (data) => {
+        const res = await firebaseRequest('expenses', 'POST', {
+            user_id: data.user_id,
+            category: data.category,
+            amount: parseFloat(data.amount) || 0,
+            date: data.date,
+            description: data.description || ''
+        });
+        return { id: res.name, _id: res.name, ...data };
+    },
+    findByIdAndDelete: async (id) => {
+        await firebaseRequest(`expenses/${id}`, 'DELETE');
+        return { id };
+    }
+};
+
+// Supplier Model Emulation
+const Supplier = {
+    find: (filter = {}) => {
+        return new QueryChain(find('suppliers', filter));
+    },
+    create: async (data) => {
+        const res = await firebaseRequest('suppliers', 'POST', {
+            user_id: data.user_id,
+            name: data.name,
+            phone: data.phone || '',
+            email: data.email || '',
+            address: data.address || ''
+        });
+        return { id: res.name, _id: res.name, ...data };
+    },
+    findByIdAndUpdate: async (id, updates) => {
+        await firebaseRequest(`suppliers/${id}`, 'PATCH', updates);
+        return { id };
+    },
+    findByIdAndDelete: async (id) => {
+        await firebaseRequest(`suppliers/${id}`, 'DELETE');
+        return { id };
     }
 };
 
@@ -414,5 +521,10 @@ module.exports = {
     Product,
     Invoice,
     Customer,
-    StockLog
+    StockLog,
+    Expense,
+    Supplier,
+    firebaseAuthSignUp,
+    firebaseAuthSignIn,
+    firebaseAuthPasswordReset
 };

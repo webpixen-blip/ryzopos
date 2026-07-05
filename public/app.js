@@ -11,14 +11,46 @@ const registerForm = document.getElementById('register-form');
 
 document.getElementById('switch-to-register').addEventListener('click', () => {
     loginForm.classList.remove('active');
+    document.getElementById('forgot-form').classList.remove('active');
     registerForm.classList.add('active');
     document.getElementById('auth-subtitle').textContent = "Register a new business";
 });
 
 document.getElementById('switch-to-login').addEventListener('click', () => {
     registerForm.classList.remove('active');
+    document.getElementById('forgot-form').classList.remove('active');
     loginForm.classList.add('active');
     document.getElementById('auth-subtitle').textContent = "Login to your account";
+});
+
+document.getElementById('switch-to-forgot').addEventListener('click', () => {
+    loginForm.classList.remove('active');
+    registerForm.classList.remove('active');
+    document.getElementById('forgot-form').classList.add('active');
+    document.getElementById('auth-subtitle').textContent = "Reset your password";
+});
+
+document.getElementById('switch-to-login-from-forgot').addEventListener('click', () => {
+    document.getElementById('forgot-form').classList.remove('active');
+    registerForm.classList.remove('active');
+    loginForm.classList.add('active');
+    document.getElementById('auth-subtitle').textContent = "Login to your account";
+});
+
+document.getElementById('forgot-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('forgot-email').value;
+    try {
+        const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if(!res.ok) throw new Error(data.error || 'Password reset failed');
+        alert(data.message || 'Password reset link sent to your email!');
+        document.getElementById('switch-to-login-from-forgot').click();
+    } catch(err) { alert(err.message); }
 });
 
 loginForm.addEventListener('submit', async (e) => {
@@ -126,7 +158,7 @@ let currentProductImageBase64 = null;
 
 // ==== DOM ELEMENTS ====
 const clockEl = document.getElementById('clock');
-const navLinks = document.querySelectorAll('.nav-link');
+const navLinks = document.querySelectorAll('.nav-link, .mobile-nav-link');
 const views = document.querySelectorAll('.view');
 const pageTitle = document.getElementById('page-title');
 const modalOverlay = document.getElementById('modal-overlay');
@@ -220,14 +252,19 @@ function setupNavigation() {
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            navLinks.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-            
             const target = link.getAttribute('data-target');
+            
+            // Remove active from all links (sidebar and mobile-nav)
+            navLinks.forEach(l => l.classList.remove('active'));
+            
+            // Synchronize active class for both desktop sidebar and mobile bottom nav links
+            document.querySelectorAll(`[data-target="${target}"]`).forEach(l => l.classList.add('active'));
+            
             views.forEach(view => view.classList.remove('active'));
             document.getElementById(target).classList.add('active');
             
-            pageTitle.textContent = link.querySelector('.link-name').textContent;
+            const nameEl = link.querySelector('.link-name') || link.querySelector('span');
+            pageTitle.textContent = nameEl ? nameEl.textContent : 'Dashboard';
             currentTab = target;
             
             // Close sidebar on mobile after navigation
@@ -243,6 +280,8 @@ function setupNavigation() {
             if(target === 'invoices-view') loadInvoices();
             if(target === 'reports-view') loadReports();
             if(target === 'admin-view') loadAdminUsers();
+            if(target === 'expenses-view') loadExpenses();
+            if(target === 'suppliers-view') loadSuppliers();
         });
     });
     
@@ -336,6 +375,24 @@ function setupModals() {
         const barcode = document.getElementById('product-barcode').value;
         const expiryDate = document.getElementById('product-expiry').value;
         
+        let imageUrl = currentProductImageBase64;
+        if (currentProductImageBase64 && currentProductImageBase64.startsWith('data:image')) {
+            try {
+                const uploadRes = await fetchAuth(`${API_BASE}/upload-image`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: currentProductImageBase64 })
+                });
+                const uploadData = await uploadRes.json();
+                if (!uploadRes.ok) throw new Error(uploadData.error || 'Upload failed');
+                imageUrl = uploadData.url;
+            } catch (err) {
+                console.error(err);
+                alert('Image upload failed, saving product without image: ' + err.message);
+                imageUrl = null;
+            }
+        }
+        
         const payload = { 
             name, 
             quantity: parseInt(qty), 
@@ -343,22 +400,23 @@ function setupModals() {
             cost_price: parseFloat(costPrice) || 0,
             barcode: barcode || '',
             expiry_date: expiryDate || '',
-            image: currentProductImageBase64
+            image: imageUrl
         };
         const method = id ? 'PUT' : 'POST';
         const url = id ? `${API_BASE}/products/${id}` : `${API_BASE}/products`;
         
         try {
-            await fetchAuth(url, {
+            const res = await fetchAuth(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
+            if (!res.ok) throw new Error('Failed to save product');
             hideModal();
             loadInventory();
         } catch (err) {
             console.error(err);
-            alert('Error saving product');
+            alert('Error saving product: ' + err.message);
         }
     });
 
@@ -510,8 +568,13 @@ async function loadDashboard() {
         const todayProfit = profitData.find(p => p.date === today)?.profit || 0;
         const monthProfit = profitData.filter(p => p.date.startsWith(currentMonth)).reduce((s, p) => s + p.profit, 0);
         
+        const monthlyExpenses = stats.monthlyExpenses || 0;
+        const netProfit = monthProfit - monthlyExpenses;
+
         document.getElementById('dash-profit-today').textContent = formatCurrency(todayProfit);
         document.getElementById('dash-profit-month').textContent = formatCurrency(monthProfit);
+        document.getElementById('dash-expenses-month').textContent = formatCurrency(monthlyExpenses);
+        document.getElementById('dash-net-profit').textContent = formatCurrency(netProfit);
 
         // Load low stock table
         const resAlerts = await fetchAuth(`${API_BASE}/dashboard/low-stock`);
@@ -1314,3 +1377,180 @@ document.querySelector('#admin-users-table tbody').addEventListener('click', asy
         }
     }
 });
+
+// ==== EXPENSE MODULE LOGIC ====
+const expenseModal = document.getElementById('expense-modal');
+let expenses = [];
+
+async function loadExpenses() {
+    try {
+        const res = await fetchAuth(`${API_BASE}/expenses`);
+        expenses = await res.json();
+        const tbody = document.querySelector('#expenses-table tbody');
+        tbody.innerHTML = '';
+        expenses.forEach(exp => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${exp.date}</td>
+                <td>${exp.category}</td>
+                <td>${exp.description || '-'}</td>
+                <td style="font-weight:bold">${formatCurrency(exp.amount)}</td>
+                <td>
+                    <button class="btn btn-danger btn-icon-only del-expense-btn" data-id="${exp.id || exp._id}"><i class='bx bx-trash'></i></button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+// Add Expense button
+document.getElementById('btn-add-expense').addEventListener('click', () => {
+    document.getElementById('expense-form').reset();
+    document.getElementById('expense-date').value = new Date().toISOString().split('T')[0];
+    showModal(expenseModal);
+});
+
+// Close Expense modal
+document.getElementById('btn-close-expense-modal').addEventListener('click', () => {
+    hideModal();
+});
+
+// Submit Expense Form
+document.getElementById('expense-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const date = document.getElementById('expense-date').value;
+    const category = document.getElementById('expense-category').value;
+    const amount = document.getElementById('expense-amount').value;
+    const description = document.getElementById('expense-description').value;
+
+    try {
+        const res = await fetchAuth(`${API_BASE}/expenses`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date, category, amount: parseFloat(amount), description })
+        });
+        if (!res.ok) throw new Error('Failed to save expense');
+        hideModal();
+        loadExpenses();
+    } catch (err) {
+        alert(err.message);
+    }
+});
+
+// Delete Expense Event Delegation
+document.querySelector('#expenses-table tbody').addEventListener('click', async (e) => {
+    const delBtn = e.target.closest('.del-expense-btn');
+    if (delBtn) {
+        if (confirm('Are you sure you want to delete this expense?')) {
+            try {
+                const id = delBtn.dataset.id;
+                const res = await fetchAuth(`${API_BASE}/expenses/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Failed to delete expense');
+                loadExpenses();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+    }
+});
+
+// ==== SUPPLIER MODULE ====
+
+async function loadSuppliers() {
+    try {
+        const res = await fetchAuth(`${API_BASE}/suppliers`);
+        const suppliers = await res.json();
+        const tbody = document.querySelector('#suppliers-table tbody');
+        if (!suppliers.length) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:30px">No suppliers found. Add your first supplier!</td></tr>';
+            return;
+        }
+        tbody.innerHTML = suppliers.map(s => `
+            <tr>
+                <td><strong>${s.name}</strong></td>
+                <td>${s.phone || '<span style="color:var(--text-muted)">—</span>'}</td>
+                <td>${s.email || '<span style="color:var(--text-muted)">—</span>'}</td>
+                <td>${s.address || '<span style="color:var(--text-muted)">—</span>'}</td>
+                <td>
+                    <div style="display:flex;gap:6px;">
+                        <button class="btn btn-sm edit-supplier-btn" data-id="${s._id}" data-name="${s.name}" data-phone="${s.phone||''}" data-email="${s.email||''}" data-address="${s.address||''}" style="background:var(--accent);color:#fff;padding:4px 10px;border:none;border-radius:6px;cursor:pointer;font-size:12px;"><i class='bx bx-edit'></i></button>
+                        <button class="btn btn-sm del-supplier-btn" data-id="${s._id}" style="background:#ef4444;color:#fff;padding:4px 10px;border:none;border-radius:6px;cursor:pointer;font-size:12px;"><i class='bx bx-trash'></i></button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        console.error('Failed to load suppliers:', err);
+    }
+}
+
+// Open Supplier Modal (Add)
+document.getElementById('btn-add-supplier').addEventListener('click', () => {
+    document.getElementById('supplier-modal-title').textContent = 'Add Supplier';
+    document.getElementById('supplier-form').reset();
+    document.getElementById('supplier-id').value = '';
+    showModal('supplier-modal');
+});
+
+// Close Supplier Modal
+document.getElementById('btn-close-supplier-modal').addEventListener('click', hideModal);
+
+// Edit & Delete Supplier via delegation
+document.querySelector('#suppliers-table tbody').addEventListener('click', async (e) => {
+    const editBtn = e.target.closest('.edit-supplier-btn');
+    const delBtn = e.target.closest('.del-supplier-btn');
+
+    if (editBtn) {
+        document.getElementById('supplier-modal-title').textContent = 'Edit Supplier';
+        document.getElementById('supplier-id').value = editBtn.dataset.id;
+        document.getElementById('supplier-name').value = editBtn.dataset.name;
+        document.getElementById('supplier-phone').value = editBtn.dataset.phone;
+        document.getElementById('supplier-email').value = editBtn.dataset.email;
+        document.getElementById('supplier-address').value = editBtn.dataset.address;
+        showModal('supplier-modal');
+    }
+
+    if (delBtn) {
+        if (confirm('Delete this supplier? This cannot be undone.')) {
+            try {
+                const res = await fetchAuth(`${API_BASE}/suppliers/${delBtn.dataset.id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Failed to delete supplier');
+                loadSuppliers();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+    }
+});
+
+// Submit Supplier Form (Add or Edit)
+document.getElementById('supplier-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('supplier-id').value;
+    const name = document.getElementById('supplier-name').value;
+    const phone = document.getElementById('supplier-phone').value;
+    const email = document.getElementById('supplier-email').value;
+    const address = document.getElementById('supplier-address').value;
+
+    const payload = { name, phone, email, address };
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `${API_BASE}/suppliers/${id}` : `${API_BASE}/suppliers`;
+
+    try {
+        const res = await fetchAuth(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Failed to save supplier');
+        hideModal();
+        loadSuppliers();
+    } catch (err) {
+        alert(err.message);
+    }
+});
+
+
