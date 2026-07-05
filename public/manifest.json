@@ -1,0 +1,21 @@
+{
+  "name": "Shamod POS - Retail Billing",
+  "short_name": "Shamod POS",
+  "description": "Professional Point of Sale System with Offline Support",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "https://ui-avatars.com/api/?name=POS&background=4f46e5&color=fff&size=192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://ui-avatars.com/api/?name=POS&background=4f46e5&color=fff&size=512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

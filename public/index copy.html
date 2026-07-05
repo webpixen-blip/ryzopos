@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shamod Firezz - Retail POS</title>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Boxicons for modern icons -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    
+    <!-- Authentication Overlay -->
+    <div id="auth-overlay" class="auth-overlay active">
+        <div class="auth-box">
+            <div class="auth-header">
+                <h2>Welcome to Shamod POS</h2>
+                <p id="auth-subtitle">Login to your account or register a new business</p>
+            </div>
+            
+            <form id="login-form" class="auth-form active">
+                <div class="form-group">
+                    <label>Email / Username</label>
+                    <input type="text" id="login-email" class="form-control" required placeholder="Email or 'Admin'">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" class="form-control" required placeholder="Password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block btn-lg">Login</button>
+                <div class="auth-switch">
+                    Don't have an account? <span id="switch-to-register">Register Business</span>
+                </div>
+            </form>
+            
+            <form id="register-form" class="auth-form">
+                <div class="form-group">
+                    <label>Business Name</label>
+                    <input type="text" id="reg-businessName" class="form-control" required placeholder="My Awesome Shop">
+                </div>
+                <div class="form-group">
+                    <label>WhatsApp Number</label>
+                    <input type="tel" id="reg-whatsapp" class="form-control" required placeholder="e.g. +94711234567">
+                    <small class="form-text text-muted" style="display:block; margin-top:5px; font-size:12px;">Include country code for marketplace checkout.</small>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="reg-email" class="form-control" required placeholder="you@domain.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="reg-password" class="form-control" required placeholder="Strong password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block btn-lg">Register</button>
+                <div class="auth-switch">
+                    Already have an account? <span id="switch-to-login">Login</span>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Application Wrapper (hidden until auth) -->
+    <div id="app-wrapper" class="app-wrapper">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+        <div class="logo-container">
+            <i class='bx bx-store-alt icon'></i>
+            <span class="logo-name">Shamod POS</span>
+        </div>
+        <ul class="nav-list">
+            <li>
+                <a href="#" class="nav-link active" data-target="dashboard-view">
+                    <i class='bx bx-grid-alt icon'></i>
+                    <span class="link-name">Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-link" data-target="pos-view">
+                    <i class='bx bx-cart icon'></i>
+                    <span class="link-name">New Bill</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-link" data-target="inventory-view">
+                    <i class='bx bx-box icon'></i>
+                    <span class="link-name">Inventory</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-link" data-target="invoices-view">
+                    <i class='bx bx-receipt icon'></i>
+                    <span class="link-name">Invoices</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" class="nav-link" data-target="reports-view">
+                    <i class='bx bx-bar-chart-alt-2 icon'></i>
+                    <span class="link-name">Reports</span>
+                </a>
+            </li>
+            <li id="nav-item-admin" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid var(--border);">
+                <a href="#" class="nav-link" data-target="admin-view">
+                    <i class='bx bx-shield-quarter icon'></i>
+                    <span class="link-name">Accounts</span>
+                </a>
+            </li>
+        </ul>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Header -->
+        <header class="top-header">
+            <div class="header-title">
+                <h1 id="page-title">Dashboard</h1>
+            </div>
+            <div class="header-right">
+                <button class="btn btn-outline" id="btn-create-marketplace" style="margin-right:12px;"><i class='bx bx-globe'></i> MarketPlace</button>
+                <div class="time-display" id="clock">00:00 AM</div>
+                <div class="user-profile">
+                    <span id="business-name-display" style="font-weight:600;margin-right:12px;">Admin</span>
+                    <img src="https://ui-avatars.com/api/?name=Admin&background=6366f1&color=fff" alt="User">
+                    <button id="btn-logout" class="btn btn-outline btn-sm" style="margin-left: 10px; padding: 6px 12px; font-size:12px;"><i class='bx bx-log-out'></i></button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Views Container -->
+        <div class="views-container">
+            <!-- Dashboard View -->
+            <section id="dashboard-view" class="view active">
+                <div class="dashboard-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class='bx bx-receipt'></i></div>
+                        <div class="stat-details">
+                            <h3>Total Bills Today</h3>
+                            <p class="stat-value" id="dash-bills-today">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class='bx bx-calendar'></i></div>
+                        <div class="stat-details">
+                            <h3>Total Bills This Month</h3>
+                            <p class="stat-value" id="dash-bills-month">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon income"><i class='bx bx-money'></i></div>
+                        <div class="stat-details">
+                            <h3>Daily Income</h3>
+                            <p class="stat-value" id="dash-income-today">0.00</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon income"><i class='bx bx-wallet'></i></div>
+                        <div class="stat-details">
+                            <h3>Monthly Income</h3>
+                            <p class="stat-value" id="dash-income-month">0.00</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class='bx bx-box'></i></div>
+                        <div class="stat-details">
+                            <h3>Total Products</h3>
+                            <p class="stat-value" id="dash-total-products">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon danger"><i class='bx bx-error'></i></div>
+                        <div class="stat-details">
+                            <h3>Low Stock Products</h3>
+                            <p class="stat-value" id="dash-low-stock">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-tables">
+                    <div class="table-card">
+                        <div class="card-header">
+                            <h2>Low Stock Alert</h2>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table" id="low-stock-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product Name</th>
+                                        <th>Current Quantity</th>
+                                        <th>Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- NOS Bill View (Placeholder for now) -->
+            <section id="pos-view" class="view">
+                <div class="pos-layout">
+                    <!-- Left: Products -->
+                    <div class="pos-products-area">
+                        <h2>Select Product</h2>
+                        <!-- Search and Categories -->
+                        <div class="pos-search">
+                            <i class='bx bx-search'></i>
+                            <input type="text" id="pos-search-input" placeholder="Search products...">
+                        </div>
+                        <!-- Products Grid -->
+                        <div class="pos-products-grid" id="pos-products-grid">
+                            <!-- Populated via JS -->
+                        </div>
+                    </div>
+                    <!-- Right: Current Bill -->
+                    <div class="pos-bill-area">
+                        <div class="bill-header">
+                            <h2>Current Bill</h2>
+                            <p id="pos-bill-no">Auto Generate</p>
+                        </div>
+                        <div class="bill-items" id="pos-bill-items">
+                            <!-- Populated via JS -->
+                        </div>
+                        <div class="bill-summary">
+                            <div class="summary-row total">
+                                <span>TOTAL</span>
+                                <span id="pos-total-amount">0.00</span>
+                            </div>
+                            <button class="btn btn-primary btn-block btn-lg" id="btn-submit-bill">Submit Bill & Print</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Inventory View -->
+            <section id="inventory-view" class="view">
+                <div class="view-header" style="flex-wrap: wrap; gap: 15px;">
+                    <div style="display:flex; align-items:center; gap:15px;">
+                        <h2>Inventory Management</h2>
+                        <div id="inventory-filter-badge" style="display:none; align-items:center; background:var(--primary); color:white; padding:4px 12px; border-radius:100px; font-size:12px; font-weight:600;">
+                            <span id="inventory-filter-name">Store Name</span>
+                            <button id="btn-clear-inventory-filter" style="background:none; border:none; color:white; margin-left:8px; cursor:pointer;"><i class='bx bx-x'></i></button>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-outline" id="btn-export-inventory"><i class='bx bx-download'></i> Export CSV</button>
+                        <button class="btn btn-primary" id="btn-add-product"><i class='bx bx-plus'></i> Add Product</button>
+                    </div>
+                </div>
+                <div class="table-card">
+                    <div class="table-responsive">
+                        <table class="data-table" id="inventory-table">
+                            <thead>
+                                <tr>
+                                    <th>Item Name</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Invoices View -->
+            <section id="invoices-view" class="view">
+                <div class="view-header">
+                    <h2>Invoices</h2>
+                    <div class="header-actions">
+                         <!-- Filters -->
+                        <input type="date" id="filter-date" class="form-control" title="Filter by date">
+                        <input type="month" id="filter-month" class="form-control" title="Filter by month">
+                        <button class="btn btn-secondary" id="btn-clear-filters">Clear</button>
+                        <button class="btn btn-outline" id="btn-export-invoices">
+                            <i class='bx bx-export'></i> Export
+                        </button>
+                    </div>
+                </div>
+                <div class="table-card">
+                    <div class="table-responsive">
+                        <table class="data-table" id="invoices-table">
+                            <thead>
+                                <tr>
+                                    <th>Invoice Number</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Total Amount</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports View -->
+            <section id="reports-view" class="view">
+                <div class="view-header">
+                    <h2>Business Reports</h2>
+                </div>
+                <div class="tabs-container">
+                    <div class="tabs-header">
+                        <button class="tab-btn active" data-report="sales">Sales Report</button>
+                        <button class="tab-btn" data-report="products">Product Sales</button>
+                    </div>
+                    <div class="tabs-body">
+                        <div class="table-card">
+                            <div class="table-responsive">
+                                <table class="data-table" id="reports-table">
+                                    <thead>
+                                        <!-- Dynamic Columns -->
+                                    </thead>
+                                    <tbody>
+                                        <!-- Dynamic Rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin Accounts View -->
+            <section id="admin-view" class="view">
+                <div class="view-header">
+                    <h2>Manage Accounts</h2>
+                </div>
+                <div class="table-card">
+                    <div class="table-responsive">
+                        <table class="data-table" id="admin-users-table">
+                            <thead>
+                                <tr>
+                                    <th>Business Name</th>
+                                    <th>Email</th>
+                                    <th>Marketplace</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Modal overlay for generic use -->
+    <div class="modal-overlay" id="modal-overlay">
+        <!-- Product Modal -->
+        <div class="modal" id="product-modal">
+            <div class="modal-header">
+                <h3 id="product-modal-title">Add Product</h3>
+                <button class="close-btn" id="btn-close-modal"><i class='bx bx-x'></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="product-form">
+                    <input type="hidden" id="product-id">
+                    <div class="form-group" style="text-align:center;">
+                        <input type="file" id="product-image" accept="image/*" style="display:none;">
+                        <div id="product-image-preview" onclick="document.getElementById('product-image').click()" style="width:120px; height:120px; border:2px dashed var(--border); border-radius:12px; margin:0 auto 10px; display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; background:var(--secondary);">
+                            <span style="color:var(--text-muted);font-size:12px;">+ Add Image</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Item Name</label>
+                        <input type="text" id="product-name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" id="product-qty" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Price</label>
+                        <input type="number" step="0.01" id="product-price" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Save Product</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Admin Edit User Modal -->
+        <div class="modal" id="admin-user-modal">
+            <div class="modal-header">
+                <h3>Edit User</h3>
+                <button class="close-btn" id="btn-close-admin-modal"><i class='bx bx-x'></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="admin-user-form">
+                    <input type="hidden" id="admin-user-id">
+                    <div class="form-group">
+                        <label>Business Name</label>
+                        <input type="text" id="admin-business-name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="admin-email" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>WhatsApp Number</label>
+                        <input type="tel" id="admin-whatsapp" class="form-control">
+                    </div>
+                    <div class="form-group" style="display:flex; align-items:center; gap: 10px;">
+                        <input type="checkbox" id="admin-marketplace-enabled" style="width:18px;height:18px;">
+                        <label style="margin:0;">Marketplace Enabled</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block" style="margin-top:20px;">Save User</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Print/Invoice Details Modal -->
+        <div class="modal" id="invoice-modal">
+            <div class="modal-header">
+                <h3>Invoice Details</h3>
+                <button class="close-btn" id="btn-close-invoice-modal"><i class='bx bx-x'></i></button>
+            </div>
+            <div class="modal-body print-area" id="print-area">
+                <div class="receipt">
+                    <div class="receipt-header">
+                        <h2>SHAMOD FIREZZ</h2>
+                        <p>Retail Shop POS</p>
+                        <p>----------------------------</p>
+                    </div>
+                    <div class="receipt-meta">
+                        <p>Invoice: <span id="receipt-no"></span></p>
+                        <p>Date: <span id="receipt-date"></span></p>
+                        <p>Time: <span id="receipt-time"></span></p>
+                    </div>
+                    <p>----------------------------</p>
+                    <table class="receipt-table" id="receipt-items">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Qty</th>
+                                <th>Price</th>
+                                <th>Amt</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated via JS -->
+                        </tbody>
+                    </table>
+                    <p>----------------------------</p>
+                    <div class="receipt-total">
+                        <span>TOTAL:</span>
+                        <span id="receipt-total-amount"></span>
+                    </div>
+                    <div class="receipt-footer">
+                        <p>Thank You!</p>
+                        <p>Visit Again</p>
+                        <p>----------------------------</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary btn-block" id="btn-print-receipt">Print Receipt</button>
+            </div>
+        </div>
+    </div>
+    </div> <!-- End of app-wrapper -->
+
+    <script src="app.js"></script>
+</body>
+</html>
