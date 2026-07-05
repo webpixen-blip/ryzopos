@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -748,6 +749,16 @@ app.get('/api/reports/trends', async (req, res) => {
 // Serves the public marketplace UI
 app.get('/:business_name', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'marketplace.html'));
+});
+
+// ==== GLOBAL JSON ERROR HANDLER ====
+// Must be defined AFTER all routes. Catches any unhandled errors and
+// returns a proper JSON response instead of Express's default HTML page,
+// which would cause "Unexpected token" errors on the frontend.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+    console.error('Unhandled server error:', err);
+    res.status(500).json({ error: err.message || 'An internal server error occurred.' });
 });
 
 // Export app for Vercel, listen for local development
