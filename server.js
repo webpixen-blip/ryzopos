@@ -547,12 +547,18 @@ app.delete('/api/invoices/:id', async (req, res) => {
 app.get('/api/reports/sales', async (req, res) => {
     try {
         const queryMatch = req.user.role === 'admin' ? {} : { user_id: req.user._id };
-        const result = await Invoice.aggregate([
-            { $match: queryMatch },
-            { $group: { _id: "$date", total_sales: { $sum: "$total_amount" } } },
-            { $project: { date: "$_id", total_sales: 1, _id: 0 } },
-            { $sort: { date: -1 } }
-        ]);
+        const invoices = await Invoice.find(queryMatch);
+        
+        const salesByDate = {};
+        invoices.forEach(inv => {
+            salesByDate[inv.date] = (salesByDate[inv.date] || 0) + (inv.total_amount || 0);
+        });
+        
+        const result = Object.keys(salesByDate).map(date => ({
+            date,
+            total_sales: salesByDate[date]
+        })).sort((a, b) => b.date.localeCompare(a.date));
+        
         res.json(result);
     } catch (err) {
         return res.status(500).json({ error: err.message });
@@ -640,27 +646,28 @@ app.get('/api/reports/stock-logs', async (req, res) => {
 app.get('/api/reports/product-sales', async (req, res) => {
     try {
         const queryMatch = req.user.role === 'admin' ? {} : { user_id: req.user._id };
-        const result = await Invoice.aggregate([
-            { $match: queryMatch },
-            { $unwind: "$items" },
-            {
-                $group: {
-                    _id: "$items.product_name",
-                    quantity_sold: { $sum: "$items.quantity" },
-                    revenue: { $sum: "$items.subtotal" }
-                }
-            },
-            {
-                $project: {
-                    product_name: "$_id",
-                    quantity_sold: 1,
-                    revenue: 1,
-                    _id: 0
-                }
-            },
-            { $sort: { quantity_sold: -1 } },
-            { $limit: 10 }
-        ]);
+        const invoices = await Invoice.find(queryMatch);
+        
+        const productSales = {};
+        invoices.forEach(inv => {
+            if (inv.items) {
+                inv.items.forEach(item => {
+                    const name = item.product_name;
+                    if (!productSales[name]) {
+                        productSales[name] = { quantity_sold: 0, revenue: 0 };
+                    }
+                    productSales[name].quantity_sold += (item.quantity || 0);
+                    productSales[name].revenue += (item.subtotal || 0);
+                });
+            }
+        });
+        
+        const result = Object.keys(productSales).map(name => ({
+            product_name: name,
+            quantity_sold: productSales[name].quantity_sold,
+            revenue: productSales[name].revenue
+        })).sort((a, b) => b.quantity_sold - a.quantity_sold).slice(0, 10);
+        
         console.log(`Product Sales Report for ${req.user.business_name}: ${result.length} items found`);
         res.json(result);
     } catch (err) {
@@ -672,43 +679,37 @@ app.get('/api/reports/product-sales', async (req, res) => {
 app.get('/api/reports/profit', async (req, res) => {
     try {
         const queryMatch = req.user.role === 'admin' ? {} : { user_id: req.user._id };
+        const invoices = await Invoice.find(queryMatch);
+        const products = await Product.find(queryMatch);
         
-        // We need to match invoices, unwind items, then join with products to get cost_price
-        // Or simpler: include current cost_price in InvoiceItem if we want historical accuracy.
-        // For now, we'll use current cost_price from Product.
+        const productCostMap = {};
+        products.forEach(p => {
+            productCostMap[p.name] = p.cost_price || 0;
+        });
         
-        const result = await Invoice.aggregate([
-            { $match: queryMatch },
-            { $unwind: "$items" },
-            {
-                $lookup: {
-                    from: "products",
-                    let: { prodName: "$items.product_name", userId: "$user_id" },
-                    pipeline: [
-                        { $match: { $expr: { $and: [ { $eq: ["$name", "$$prodName"] }, { $eq: ["$user_id", "$$userId"] } ] } } }
-                    ],
-                    as: "productInfo"
-                }
-            },
-            { $unwind: "$productInfo" },
-            {
-                $group: {
-                    _id: "$date",
-                    revenue: { $sum: "$items.subtotal" },
-                    cost: { $sum: { $multiply: ["$items.quantity", "$productInfo.cost_price"] } }
-                }
-            },
-            {
-                $project: {
-                    date: "$_id",
-                    revenue: 1,
-                    cost: 1,
-                    profit: { $subtract: ["$revenue", "$cost"] },
-                    _id: 0
-                }
-            },
-            { $sort: { date: -1 } }
-        ]);
+        const profitByDate = {};
+        invoices.forEach(inv => {
+            const date = inv.date;
+            if (!profitByDate[date]) {
+                profitByDate[date] = { revenue: 0, cost: 0 };
+            }
+            if (inv.items) {
+                inv.items.forEach(item => {
+                    const subtotal = item.subtotal || 0;
+                    const costPrice = productCostMap[item.product_name] || 0;
+                    const cost = (item.quantity || 0) * costPrice;
+                    profitByDate[date].revenue += subtotal;
+                    profitByDate[date].cost += cost;
+                });
+            }
+        });
+        
+        const result = Object.keys(profitByDate).map(date => ({
+            date,
+            revenue: profitByDate[date].revenue,
+            cost: profitByDate[date].cost,
+            profit: profitByDate[date].revenue - profitByDate[date].cost
+        })).sort((a, b) => b.date.localeCompare(a.date));
         
         res.json(result);
     } catch (err) {
@@ -719,25 +720,24 @@ app.get('/api/reports/profit', async (req, res) => {
 app.get('/api/reports/trends', async (req, res) => {
     try {
         const queryMatch = req.user.role === 'admin' ? {} : { user_id: req.user._id };
-        const result = await Invoice.aggregate([
-            { $match: queryMatch },
-            {
-                $group: {
-                    _id: { $substr: ["$time", 0, 2] }, // Group by hour (HH)
-                    sales_count: { $sum: 1 },
-                    revenue: { $sum: "$total_amount" }
-                }
-            },
-            {
-                $project: {
-                    hour: "$_id",
-                    sales_count: 1,
-                    revenue: 1,
-                    _id: 0
-                }
-            },
-            { $sort: { hour: 1 } }
-        ]);
+        const invoices = await Invoice.find(queryMatch);
+        
+        const hourlyTrends = {};
+        invoices.forEach(inv => {
+            const hour = (inv.time || '00:00').substring(0, 2);
+            if (!hourlyTrends[hour]) {
+                hourlyTrends[hour] = { sales_count: 0, revenue: 0 };
+            }
+            hourlyTrends[hour].sales_count += 1;
+            hourlyTrends[hour].revenue += (inv.total_amount || 0);
+        });
+        
+        const result = Object.keys(hourlyTrends).map(hour => ({
+            hour,
+            sales_count: hourlyTrends[hour].sales_count,
+            revenue: hourlyTrends[hour].revenue
+        })).sort((a, b) => a.hour.localeCompare(b.hour));
+        
         console.log(`Sales Trends Report for ${req.user.business_name}: ${result.length} data points found`);
         res.json(result);
     } catch (err) {
